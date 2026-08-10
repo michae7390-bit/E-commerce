@@ -1,1 +1,341 @@
+# E-commerce
+
+This file contains a concise overview, setup steps, and example Laravel code snippets for a simple e-commerce application (Products, Cart, Orders, and a PaymentService stub). Add these files to your Laravel project as shown or copy/paste where appropriate.
+
+---
+
+## Overview
+
+A minimal e-commerce app typically includes:
+- Product management (model + migration + factory/seeders)
+- Cart functionality (add/update/remove items, show cart)
+- Orders (store orders and order items)
+- Payment integration (stubbed service for Stripe)
+- Simple frontend views (Blade)
+
+
+## Quick setup (Laravel)
+
+1. Clone repo and install dependencies:
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+npm install && npm run dev
+```
+
+2. Configure .env with database and Stripe keys.
+3. Run migrations and seeders:
+
+```bash
+php artisan migrate --seed
+```
+
+---
+
+## Example: Product model (app/Models/Product.php)
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Product extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'name',
+        'slug',
+        'description',
+        'price',
+        'stock',
+        'image_path',
+    ];
+
+    public function getPriceFormattedAttribute()
+    {
+        return number_format($this->price / 100, 2); // price stored in cents
+    }
+}
+```
+
+
+## Example: products migration (database/migrations/xxxx_create_products_table.php)
+
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up()
+    {
+        Schema::create('products', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->text('description')->nullable();
+            $table->unsignedBigInteger('price')->default(0); // cents
+            $table->unsignedInteger('stock')->default(0);
+            $table->string('image_path')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down()
+    {
+        Schema::dropIfExists('products');
+    }
+};
+```
+
+
+## Example: CartController (app/Http/Controllers/CartController.php)
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Session;
+use App\Models\Product;
+
+class CartController extends Controller
+{
+    public function index()
+    {
+        $cart = Session::get('cart', []);
+        return view('cart.index', compact('cart'));
+    }
+
+    public function add(Request $request, Product $product)
+    {
+        $qty = max(1, (int) $request->input('quantity', 1));
+        $cart = Session::get('cart', []);
+
+        if (isset($cart[$product->id])) {
+            $cart[$product->id]['quantity'] += $qty;
+        } else {
+            $cart[$product->id] = [
+                'id' => $product->id,
+                'name' => $product->name,
+                'price' => $product->price,
+                'quantity' => $qty,
+            ];
+        }
+
+        Session::put('cart', $cart);
+
+        return redirect()->back()->with('success', 'Product added to cart.');
+    }
+
+    public function update(Request $request, Product $product)
+    {
+        $qty = max(0, (int) $request->input('quantity', 1));
+        $cart = Session::get('cart', []);
+
+        if ($qty === 0) {
+            unset($cart[$product->id]);
+        } else {
+            $cart[$product->id]['quantity'] = $qty;
+        }
+
+        Session::put('cart', $cart);
+
+        return redirect()->route('cart.index')->with('success', 'Cart updated.');
+    }
+
+    public function remove(Product $product)
+    {
+        $cart = Session::get('cart', []);
+        unset($cart[$product->id]);
+        Session::put('cart', $cart);
+
+        return redirect()->route('cart.index')->with('success', 'Item removed.');
+    }
+}
+```
+
+
+## Example: Order model (app/Models/Order.php)
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Order extends Model
+{
+    use HasFactory;
+
+    protected $fillable = ['user_id', 'total_amount', 'status', 'meta'];
+
+    protected $casts = [
+        'meta' => 'array',
+    ];
+
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+}
+```
+
+And a minimal OrderItem model:
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class OrderItem extends Model
+{
+    protected $fillable = ['order_id', 'product_id', 'quantity', 'unit_price'];
+
+    public function product()
+    {
+        return $this->belongsTo(Product::class);
+    }
+}
+```
+
+
+## Example: orders migration (database/migrations/xxxx_create_orders_tables.php)
+
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up()
+    {
+        Schema::create('orders', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->unsignedBigInteger('total_amount')->default(0);
+            $table->string('status')->default('pending');
+            $table->json('meta')->nullable();
+            $table->timestamps();
+        });
+
+        Schema::create('order_items', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('order_id')->constrained('orders')->onDelete('cascade');
+            $table->foreignId('product_id')->constrained('products');
+            $table->unsignedInteger('quantity');
+            $table->unsignedBigInteger('unit_price');
+            $table->timestamps();
+        });
+    }
+
+    public function down()
+    {
+        Schema::dropIfExists('order_items');
+        Schema::dropIfExists('orders');
+    }
+};
+```
+
+
+## Example: Payment service stub (app/Services/PaymentService.php)
+
+```php
+<?php
+
+namespace App\Services;
+
+class PaymentService
+{
+    protected $stripe; // inject Stripe client if used
+
+    public function __construct()
+    {
+        // Configure Stripe client here (example)
+        // $this->stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+    }
+
+    public function charge(array $payload): array
+    {
+        // Example payload: ['amount' => 1000, 'currency' => 'usd', 'source' => 'tok_visa']
+        // Return standardized response for success / failure
+
+        // Placeholder implementation:
+        return [
+            'success' => true,
+            'transaction_id' => 'txn_' . uniqid(),
+        ];
+    }
+}
+```
+
+
+## Example: routes/web.php snippets
+
+```php
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\ProductController;
+
+Route::get('/', [ProductController::class, 'index'])->name('products.index');
+
+Route::prefix('cart')->group(function () {
+    Route::get('/', [CartController::class, 'index'])->name('cart.index');
+    Route::post('add/{product}', [CartController::class, 'add'])->name('cart.add');
+    Route::post('update/{product}', [CartController::class, 'update'])->name('cart.update');
+    Route::post('remove/{product}', [CartController::class, 'remove'])->name('cart.remove');
+});
+```
+
+
+## Example: Blade (resources/views/products/index.blade.php)
+
+```blade
+@extends('layouts.app')
+
+@section('content')
+<div class="container">
+  <div class="row">
+    @foreach($products as $product)
+      <div class="col-md-4">
+        <div class="card">
+          <img src="{{ $product->image_path }}" class="card-img-top" alt="{{ $product->name }}">
+          <div class="card-body">
+            <h5 class="card-title">{{ $product->name }}</h5>
+            <p class="card-text">{{ $product->description }}</p>
+            <p class="card-text">${{ $product->price / 100 }}</p>
+            <form action="{{ route('cart.add', $product) }}" method="POST">
+              @csrf
+              <button class="btn btn-primary">Add to cart</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    @endforeach
+  </div>
+</div>
+@endsection
+```
+
+---
+
+Notes:
+- Prices are stored in cents as integers to avoid floating point errors.
+- This document contains example code only. Add appropriate validation, authorization, tests, and error handling before using in production.
 
