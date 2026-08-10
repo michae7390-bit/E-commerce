@@ -4,8 +4,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\ProductController;
 
-// Product listing (ProductController is not created by this commit; create or adapt as needed)
+// Product listing and show
 Route::get('/', [ProductController::class, 'index'])->name('products.index');
+Route::get('products/{product}', [ProductController::class, 'show'])->name('products.show');
 
 Route::prefix('cart')->group(function () {
     Route::get('/', [CartController::class, 'index'])->name('cart.index');
