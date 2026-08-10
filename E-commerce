@@ -1,42 +1,39 @@
-# E-commerce
+// E-commerce
 
-This file contains a concise overview, setup steps, and example Laravel code snippets for a simple e-commerce application (Products, Cart, Orders, and a PaymentService stub). Add these files to your Laravel project as shown or copy/paste where appropriate.
+// This file contains a concise overview, setup steps, and example Laravel code snippets for a simple e-commerce application (Products, Cart, Orders, and a PaymentService stub). Add these files to your Laravel project as shown or copy/paste where appropriate.
 
----
+// Overview
 
-## Overview
-
-A minimal e-commerce app typically includes:
-- Product management (model + migration + factory/seeders)
-- Cart functionality (add/update/remove items, show cart)
-- Orders (store orders and order items)
-- Payment integration (stubbed service for Stripe)
-- Simple frontend views (Blade)
+// A minimal e-commerce app typically includes:
+// - Product management (model + migration + factory/seeders)
+//- Cart functionality (add/update/remove items, show cart)
+// - Orders (store orders and order items)
+// - Payment integration (stubbed service for Stripe)
+// - Simple frontend views (Blade)
 
 
-## Quick setup (Laravel)
+// Quick setup (Laravel)
 
-1. Clone repo and install dependencies:
+// 1. Clone repo and install dependencies:
 
-```bash
-composer install
-cp .env.example .env
-php artisan key:generate
-npm install && npm run dev
+// ```bash
+// composer install
+// cp .env.example .env
+// php artisan key:generate
+// npm install && npm run dev
 ```
 
-2. Configure .env with database and Stripe keys.
-3. Run migrations and seeders:
+// 2. Configure .env with database and Stripe keys.
+// 3. Run migrations and seeders:
 
-```bash
-php artisan migrate --seed
-```
+// ```bash
+// php artisan migrate --seed
 
----
 
-## Example: Product model (app/Models/Product.php)
+// ## Example: Product model (app/Models/Product.php)
 
 ```php
+
 <?php
 
 namespace App\Models;
