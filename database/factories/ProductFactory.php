@@ -16,12 +16,12 @@ class ProductFactory extends Factory
 
         return [
             'name' => ucfirst($name),
-            // slug includes a short unique suffix to avoid collisions when seeding many products
-            'slug' => Str::slug($name) . '-' . $this->faker->unique()->numberBetween(1000, 9999),
+            // slug uses a short generated suffix to avoid exhausting Faker's unique() pool
+            'slug' => $this->generateSlug($name),
             'description' => $this->faker->paragraphs(rand(1,3), true),
-            // price in cents
-            'price' => $this->faker->numberBetween(500, 20000),
-            'stock' => $this->faker->numberBetween(0, 100),
+            // price in cents, rounded to the nearest 50 for realistic pricing
+            'price' => $this->roundedPrice($this->faker->numberBetween(500, 20000)),
+            'stock' => max(0, (int) $this->faker->numberBetween(0, 100)),
             'image_path' => null,
         ];
     }
@@ -50,6 +50,16 @@ class ProductFactory extends Factory
     }
 
     /**
+     * Set an exact stock level.
+     */
+    public function withStock(int $quantity): self
+    {
+        return $this->state([
+            'stock' => max(0, $quantity),
+        ]);
+    }
+
+    /**
      * Attach a realistic image path for the product. This doesn't store any files —
      * it only sets a plausible path which you can use with your storage/seed logic.
      */
@@ -57,7 +67,7 @@ class ProductFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $baseName = isset($attributes['name']) ? Str::slug($attributes['name']) : Str::slug($this->faker->word());
-            $filename = sprintf('products/%s-%s.jpg', $baseName, $this->faker->unique()->numberBetween(1000, 9999));
+            $filename = sprintf('products/%s-%s.jpg', $baseName, $this->generateUniqueSuffix());
 
             return [
                 'image_path' => $filename,
@@ -66,14 +76,16 @@ class ProductFactory extends Factory
     }
 
     /**
-     * Set a price in the provided range (in cents).
+     * Set a price in the provided range (in cents). Price will be rounded to the nearest 50 cents.
      * Example: pricedBetween(1000, 5000) produces prices between $10.00 and $50.00.
      */
     public function pricedBetween(int $minCents = 500, int $maxCents = 20000): self
     {
         return $this->state(function () use ($minCents, $maxCents) {
+            $price = $this->faker->numberBetween($minCents, $maxCents);
+
             return [
-                'price' => $this->faker->numberBetween($minCents, $maxCents),
+                'price' => $this->roundedPrice($price),
             ];
         });
     }
@@ -86,8 +98,43 @@ class ProductFactory extends Factory
     {
         return $this->afterMaking(function (Product $product) {
             if (empty($product->slug) && ! empty($product->name)) {
-                $product->slug = Str::slug($product->name) . '-' . $this->faker->unique()->numberBetween(1000, 9999);
+                $product->slug = $this->generateSlug($product->name);
             }
+
+            // Ensure price is an integer and not negative
+            $product->price = (int) ($product->price ?? 0);
+            if ($product->price < 0) {
+                $product->price = abs($product->price);
+            }
+
+            // Ensure stock is a non-negative integer
+            $product->stock = max(0, (int) ($product->stock ?? 0));
         });
+    }
+
+    /**
+     * Round price (in cents) to the nearest 50 cents to produce realistic pricing.
+     */
+    private function roundedPrice(int $cents): int
+    {
+        $step = 50; // 50 cents
+        return (int) (round($cents / $step) * $step);
+    }
+
+    /**
+     * Generate a short unique suffix used for slugs and filenames.
+     */
+    private function generateUniqueSuffix(): string
+    {
+        return substr(md5(uniqid((string) mt_rand(), true)), 0, 8);
+    }
+
+    /**
+     * Build a slug from the product name and a short suffix to avoid collisions without
+     * relying on Faker's unique() which can be exhausted in very large seed runs.
+     */
+    private function generateSlug(string $name): string
+    {
+        return Str::slug($name) . '-' . $this->generateUniqueSuffix();
     }
 }
