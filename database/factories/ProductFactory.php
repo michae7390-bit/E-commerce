@@ -121,20 +121,51 @@ class ProductFactory extends Factory
         return (int) (round($cents / $step) * $step);
     }
 
+    // maximum attempts to find a non-colliding slug in the database
+    private $maxSlugAttempts = 10;
+
     /**
      * Generate a short unique suffix used for slugs and filenames.
+     * Uses random_bytes when available and falls back to md5(uniqid()) if not.
      */
     private function generateUniqueSuffix(): string
     {
-        return substr(md5(uniqid((string) mt_rand(), true)), 0, 8);
+        try {
+            return substr(bin2hex(random_bytes(4)), 0, 8);
+        } catch (\Throwable $e) {
+            return substr(md5(uniqid((string) mt_rand(), true)), 0, 8);
+        }
     }
 
     /**
-     * Build a slug from the product name and a short suffix to avoid collisions without
-     * relying on Faker's unique() which can be exhausted in very large seed runs.
+     * Build a slug from the product name and a short suffix. Attempts to avoid DB collisions
+     * by checking existing Product slugs. Keeps attempts bounded to avoid infinite loops.
+     */
+    private function ensureUniqueSlug(string $name): string
+    {
+        $base = Str::slug($name) ?: 'product';
+
+        for ($i = 0; $i < $this->maxSlugAttempts; $i++) {
+            $candidate = $base . '-' . $this->generateUniqueSuffix();
+
+            try {
+                if (! Product::where('slug', $candidate)->exists()) {
+                    return $candidate;
+                }
+            } catch (\Throwable $e) {
+                // swallow DB errors and continue; fallback will handle uniqueness
+            }
+        }
+
+        // final fallback: include timestamp and short hash to guarantee uniqueness
+        return $base . '-' . time() . '-' . substr(md5(uniqid((string) mt_rand(), true)), 0, 6);
+    }
+
+    /**
+     * Public slug builder used by the factory.
      */
     private function generateSlug(string $name): string
     {
-        return Str::slug($name) . '-' . $this->generateUniqueSuffix();
+        return $this->ensureUniqueSlug($name);
     }
 }
